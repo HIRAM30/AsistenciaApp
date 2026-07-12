@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "849051826489",
+    "project_id": "control-asistencia-f6eb5",
+    "storage_bucket": "control-asistencia-f6eb5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:849051826489:android:61ccc173eadfa6ada110e8",
+        "android_client_info": {
+          "package_name": "com.example.asistencia_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOFV8VJUqbHWLUvg_s6tKe6BifBQvpuzk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
