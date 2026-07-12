@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_user.dart';
+import '../firebase_options.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -28,38 +30,48 @@ class AuthService {
   }
 
   // Solo el admin debería poder crear trabajadores. Esto crea la cuenta
-  // de Auth y el documento en Firestore. Requiere que el admin esté
-  // autenticado; en producción esto normalmente se hace desde un backend
-  // o Cloud Function para no cerrar la sesión del admin al crear un usuario.
+  // de Auth y el documento en Firestore usando una instancia SECUNDARIA
+  // de Firebase, para no cerrar la sesión del admin en el proceso.
   Future<void> crearTrabajador({
     required String nombre,
     required String correo,
     required String passwordTemporal,
   }) async {
-    // Usamos una instancia secundaria para no perder la sesión del admin.
-    final secondaryApp = await _crearAppSecundaria();
+    final secondaryApp = await _obtenerAppSecundaria();
     final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-    final cred = await secondaryAuth.createUserWithEmailAndPassword(
-      email: correo.trim(),
-      password: passwordTemporal,
-    );
-    await _db.collection('usuarios').doc(cred.user!.uid).set(
-      AppUser(
-        uid: cred.user!.uid,
-        nombre: nombre,
-        correo: correo,
-        rol: 'trabajador',
-      ).toMap(),
-    );
-    await secondaryAuth.signOut();
-    await secondaryApp.delete();
+    try {
+      final cred = await secondaryAuth.createUserWithEmailAndPassword(
+        email: correo.trim(),
+        password: passwordTemporal,
+      );
+      await _db.collection('usuarios').doc(cred.user!.uid).set(
+        AppUser(
+          uid: cred.user!.uid,
+          nombre: nombre,
+          correo: correo,
+          rol: 'trabajador',
+        ).toMap(),
+      );
+    } finally {
+      // Cerramos sesión en la app secundaria SIEMPRE, incluso si algo
+      // falló, para no dejar una sesión fantasma abierta ahí.
+      await secondaryAuth.signOut();
+    }
   }
 
-  Future<dynamic> _crearAppSecundaria() async {
-    // Import diferido para evitar dependencia circular; ver firebase_options.dart
-    throw UnimplementedError(
-      'Configura firebase_options.dart y descomenta esta función '
-      'usando Firebase.initializeApp(name: "secondary", options: ...)',
-    );
+  /// Crea (o reutiliza) una segunda instancia de Firebase con el mismo
+  /// proyecto, solo para poder registrar trabajadores sin desloguear al
+  /// admin. FirebaseAuth.instanceFor mantiene su propia sesión separada
+  /// de la instancia principal (Firebase.app()).
+  Future<FirebaseApp> _obtenerAppSecundaria() async {
+    const nombreAppSecundaria = 'secondaryAdminApp';
+    try {
+      return Firebase.app(nombreAppSecundaria);
+    } on FirebaseException {
+      return Firebase.initializeApp(
+        name: nombreAppSecundaria,
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
   }
 }

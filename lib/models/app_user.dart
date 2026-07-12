@@ -2,15 +2,13 @@ class AppUser {
   final String uid;
   final String nombre;
   final String correo;
-  final String rol; // 'trabajador' o 'admin'
-  final bool activo;
+  final String rol;
 
   AppUser({
     required this.uid,
     required this.nombre,
     required this.correo,
-    required this.rol,
-    this.activo = true,
+    this.rol = 'trabajador',
   });
 
   factory AppUser.fromMap(String uid, Map<String, dynamic> data) {
@@ -19,7 +17,6 @@ class AppUser {
       nombre: data['nombre'] ?? '',
       correo: data['correo'] ?? '',
       rol: data['rol'] ?? 'trabajador',
-      activo: data['activo'] ?? true,
     );
   }
 
@@ -28,9 +25,9 @@ class AppUser {
       'nombre': nombre,
       'correo': correo,
       'rol': rol,
-      'activo': activo,
     };
   }
 
   bool get esAdmin => rol == 'admin';
+  bool get esTrabajador => rol == 'trabajador';
 }

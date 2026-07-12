@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "890103104330",
+    "project_id": "asistencia-empresa-c0a16",
+    "storage_bucket": "asistencia-empresa-c0a16.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:890103104330:android:5ddac198a82632756b77b3",
+        "android_client_info": {
+          "package_name": "com.example.asistencia_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgVqB7xR1SK0yjDiBDbGvHj-9s8stYugw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

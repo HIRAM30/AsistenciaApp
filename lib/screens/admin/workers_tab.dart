@@ -1,95 +1,218 @@
 import 'package:flutter/material.dart';
-import '../../models/app_user.dart';
-import '../../services/firestore_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/auth_service.dart';
 
-class WorkersTab extends StatelessWidget {
+class WorkersTab extends StatefulWidget {
   const WorkersTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final firestoreService = FirestoreService();
+  State<WorkersTab> createState() => _WorkersTabState();
+}
 
-    return Scaffold(
-      body: StreamBuilder<List<AppUser>>(
-        stream: firestoreService.trabajadoresStream(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final trabajadores = snapshot.data!;
-          if (trabajadores.isEmpty) {
-            return const Center(child: Text('Aún no hay trabajadores registrados.'));
-          }
-          return ListView.builder(
-            itemCount: trabajadores.length,
-            itemBuilder: (context, i) {
-              final t = trabajadores[i];
-              return ListTile(
-                leading: CircleAvatar(child: Text(t.nombre.isNotEmpty ? t.nombre[0] : '?')),
-                title: Text(t.nombre),
-                subtitle: Text(t.correo),
-                trailing: Switch(
-                  value: t.activo,
-                  onChanged: (val) =>
-                      firestoreService.actualizarEstadoTrabajador(t.uid, val),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _mostrarDialogoAgregar(context),
-        child: const Icon(Icons.person_add),
+class _WorkersTabState extends State<WorkersTab> {
+  final _formKey = GlobalKey<FormState>();
+  final _nombreController = TextEditingController();
+  final _correoController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _authService = AuthService();
+  bool _isLoading = false;
+
+  Future<void> _crearTrabajador() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _authService.crearTrabajador(
+        nombre: _nombreController.text.trim(),
+        correo: _correoController.text.trim(),
+        passwordTemporal: _passwordController.text,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trabajador creado exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Limpiar campos
+        _nombreController.clear();
+        _correoController.clear();
+        _passwordController.clear();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Registrar Nuevo Trabajador',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _nombreController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre completo',
+                prefixIcon: Icon(Icons.person),
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Ingresa el nombre';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _correoController,
+              decoration: const InputDecoration(
+                labelText: 'Correo electronico',
+                prefixIcon: Icon(Icons.email),
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Ingresa el correo';
+                }
+                if (!value.contains('@')) {
+                  return 'Ingresa un correo valido';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passwordController,
+              decoration: const InputDecoration(
+                labelText: 'Contrasena temporal',
+                prefixIcon: Icon(Icons.lock),
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Ingresa una contrasena';
+                }
+                if (value.length < 6) {
+                  return 'La contrasena debe tener al menos 6 caracteres';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _crearTrabajador,
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        'Registrar Trabajador',
+                        style: TextStyle(fontSize: 16),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            const Text(
+              'Lista de Trabajadores',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _buildWorkersList(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> _mostrarDialogoAgregar(BuildContext context) async {
-    final nombreCtrl = TextEditingController();
-    final correoCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
+  Widget _buildWorkersList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('usuarios')
+          .where('rol', isEqualTo: 'trabajador')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}'),
+          );
+        }
 
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Nuevo trabajador'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-            TextField(controller: correoCtrl, decoration: const InputDecoration(labelText: 'Correo')),
-            TextField(controller: passCtrl, obscureText: true,
-                decoration: const InputDecoration(labelText: 'Contraseña temporal')),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              try {
-                await AuthService().crearTrabajador(
-                  nombre: nombreCtrl.text,
-                  correo: correoCtrl.text,
-                  passwordTemporal: passCtrl.text,
-                );
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-              } catch (e) {
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Crear'),
-          ),
-        ],
-      ),
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Text('No hay trabajadores registrados'),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            final doc = snapshot.data!.docs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.person),
+                ),
+                title: Text(data['nombre'] ?? 'Sin nombre'),
+                subtitle: Text(data['correo'] ?? 'Sin correo'),
+                trailing: const Icon(Icons.arrow_forward_ios),
+              ),
+            );
+          },
+        );
+      },
     );
+  }
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _correoController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
